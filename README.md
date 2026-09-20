@@ -39,6 +39,7 @@ GitHub Pagesなどの静的ホスティングサービスにそのままデプ�
 
 ## SNSリンクの設定
 
-各HTMLファイル内の `https://note.com/` と `https://www.instagram.com/` へのリンクを、
-実際のnote・Instagramアカウントの URL に差し替えてください（`index.html` の SNS セクション、
+Instagram (`https://www.instagram.com/teacher.life.desigh/`) は設定済みです。
+noteのアカウントが決まったら、各HTMLファイル内の `https://note.com/` へのリンクを
+実際のnoteアカウントの URL に差し替えてください（`index.html` の SNS セクション、
 `about.html`、および各ページのフッター内にあります）。
