@@ -128,10 +128,26 @@
     });
   }
 
+  /* ---------- リンク集：都道府県テーブルの検索 ---------- */
+  function initPrefSearch() {
+    var input = document.getElementById("pref-search-input");
+    var rows = document.querySelectorAll(".pref-table tbody tr");
+    if (!input || rows.length === 0) return;
+
+    input.addEventListener("input", function () {
+      var query = input.value.trim();
+      rows.forEach(function (row) {
+        var match = row.textContent.indexOf(query) !== -1;
+        row.classList.toggle("is-hidden", !match);
+      });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
     initFontSize();
     initNav();
     initMaterialFilter();
+    initPrefSearch();
   });
 })();
