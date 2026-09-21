@@ -6,14 +6,13 @@
 
 1. 完成した教材ファイル（例: `asa-no-kai-worksheet.docx`）をこの `materials/` フォルダに追加します。
    カテゴリーごとにサブフォルダを作っても構いません（例: `materials/worksheet/`）。
-2. `materials.html` の `.material-grid` 内に、教材カードを1つ追加します。
-   既存の `<article class="material-card is-placeholder" ...>` をコピーして、
-   - `is-placeholder` クラスを削除
+2. `materials.html` の「配布教材」セクション内の `.material-grid` に、既存のカード
+   （`<article class="material-card" data-category="other">...</article>` など）を
+   コピーして教材カードを1つ追加します。
    - `data-category` を `worksheet` / `slide` / `other` から選択
    - タイトル・説明文・ファイル形式（Word/PDF/PowerPointなど）を編集
-   - `<span class="download-link" aria-disabled="true">近日公開予定</span>` を
-     `<a class="download-link" href="materials/ファイル名.docx" download>ダウンロード（Word）</a>`
-     のように、実際のファイルへのリンクに置き換えます。
+   - `<a class="download-link" href="materials/ファイル名.docx" ...>ダウンロード（Word）</a>`
+     のように、実際のファイルへのリンクを設定します。
 3. 変更をコミットして公開します。
 
 ## ファイル形式について
