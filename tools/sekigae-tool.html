@@ -393,7 +393,7 @@
     class: "1〜30番には名前、<b>31・32番は名前が空欄</b>です。空欄の児童は座席表に「31番」のように番号で表示されます。5番・12番には「前の方の席」のチェックが入っています。人数を変えたり、名前を書き換えたりしてみましょう。",
     layout: "6列の教室で、いちばん後ろの両端を空けています。座席表の下の<b>「列目」の数字</b>を変えると、列ごとの席数を自由に変えられます。班の大きさ（4人班・6人班など）も切り替えてみましょう。",
     rules: "「同じ班にしたくない」ペアが3組、「同じ班にしたい」ペアが1組登録されています。過去2回分の履歴もあるので、前回と同じメンバーになりにくくなります。ペアを追加・削除してみましょう。",
-    shuffle: "3つの決め方を試してみましょう。結果の下に「条件が守られているか」「前回と同じ班のペアがいるか」が表示されます。席を2つ続けてタップすると入れ替えられます。",
+    shuffle: "3つの決め方を試してみましょう。結果の下に「条件が守られているか」「前回と同じ班のペアがいるか」が表示されます。席を2つ続けてタップすると入れ替えられます。「📄 PDFで保存」で座席表をPDFにできます。",
     history: "サンプルには過去2回分の記録が入っています。「表示」で当時の座席表を見たり、「同じ班になった回数」で児童を選んだりしてみましょう。"
   };
   var TAB_ORDER = ["guide", "class", "layout", "rules", "shuffle", "history"];
@@ -741,7 +741,7 @@
       step(2, "座席と班を決める", "列の数・席の数を自由に設定できます。列ごとに席数を変えたり、使わない席を作ったりもできます。班の大きさ（ペア・4人班・6人班など）も選べます。") +
       step(3, "条件を設定する", "「同じ班にしたくない」「同じ班にしたい」ペアや、前の方の席にしたい児童を登録します。") +
       step(4, "席替えをする", "シンプルなシャッフル、ルーレットで1席ずつ発表する「ドキドキ発表」、一人ずつ引く「くじ引き」から選べます。結果は手動で入れ替えもできます。") +
-      step(5, "決定して履歴に保存する", "「この席で決定」を押すと記録されます。次回からは、この記録をもとに同じメンバーになりにくいよう配慮して席を決めます。") +
+      step(5, "決定して履歴に保存する", "「この席で決定」を押すと記録されます。次回からは、この記録をもとに同じメンバーになりにくいよう配慮して席を決めます。座席表は「📄 PDFで保存」でPDFファイルにして、配布や掲示に使えます。") +
       "</ol>" +
       '<div class="row" style="margin-top:14px"><button class="btn secondary" data-act="goto" data-tab="class">自分のクラスで始める →</button></div></section>' +
 
@@ -907,6 +907,7 @@
         (ui.reveal ? "" : reportHTML(c, a)) +
         '<div class="row" style="margin-top:14px">' +
         '<button class="btn primary" data-act="save-draft"' + (ui.reveal ? " disabled" : "") + ">💾 " + (d.savedId ? "変更を上書き保存" : "この席で決定（履歴に保存）") + "</button>" +
+        '<button class="btn" data-act="pdf"' + (ui.reveal ? " disabled" : "") + ">📄 PDFで保存</button>" +
         '<button class="btn" data-act="print"' + (ui.reveal ? " disabled" : "") + ">🖨 印刷</button>" +
         '<button class="btn danger" data-act="discard-draft"' + (ui.reveal ? " disabled" : "") + ">結果を破棄</button></div></section>";
     }
@@ -943,7 +944,7 @@
       var v = c.history.find(function (h) { return h.id === ui.historyView; });
       if (v) {
         html += '<h3>' + fmtDate(v.date) + " の座席表</h3>" + seatGridHTML(historyClassView(c, v), v.layout, v.seats, { teacherView: ui.teacherView }) +
-          '<div class="row" style="margin-top:10px"><button class="btn small" data-act="print-history" data-id="' + v.id + '">🖨 この記録を印刷</button></div>';
+          '<div class="row" style="margin-top:10px"><button class="btn small" data-act="pdf-history" data-id="' + v.id + '">📄 PDFで保存</button><button class="btn small" data-act="print-history" data-id="' + v.id + '">🖨 この記録を印刷</button></div>';
       }
     }
     html += "</section>";
@@ -1175,6 +1176,147 @@
     area.innerHTML = "<h1>" + esc(title) + "</h1>" + seatGridHTML(c, layout, seats, { teacherView: ui.teacherView });
     window.print();
   }
+  // ------------------------------------------------------------------
+  // PDF出力：座席表をキャンバスに描いて、A4のPDF（画像1枚）にして保存する
+  // 外部ライブラリを使わず、オフラインでも動くようにしている
+  // ------------------------------------------------------------------
+  var PDF_FONT = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Zen Maru Gothic", "Yu Gothic", "Meiryo", "Noto Sans JP", "Noto Sans CJK JP", sans-serif';
+  var PDF_GROUP_COLORS = ["#fdeee8", "#e8f1ef", "#fdf3dc", "#ece9f7", "#e7f0fb"];
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  // 枠に収まるように文字サイズを調整して描く（入らなければ2行に分ける）
+  function fitText(ctx, text, cx, cy, maxW, maxH, size, weight) {
+    var min = Math.max(14, size * 0.45), lines = [text];
+    ctx.font = weight + " " + size + "px " + PDF_FONT;
+    while (size > min && ctx.measureText(text).width > maxW) { size -= 2; ctx.font = weight + " " + size + "px " + PDF_FONT; }
+    if (ctx.measureText(text).width > maxW && text.length > 1) {
+      var sp = text.indexOf(" ") > 0 ? text.indexOf(" ") : text.indexOf("　") > 0 ? text.indexOf("　") : Math.ceil(text.length / 2);
+      lines = [text.slice(0, sp).trim(), text.slice(sp).trim()];
+      size = Math.min(size * 1.3, maxH / 2.4);
+      ctx.font = weight + " " + size + "px " + PDF_FONT;
+      while (size > 12 && Math.max(ctx.measureText(lines[0]).width, ctx.measureText(lines[1]).width) > maxW) { size -= 2; ctx.font = weight + " " + size + "px " + PDF_FONT; }
+    }
+    var lh = size * 1.2;
+    lines.forEach(function (ln, i) { ctx.fillText(ln, cx, cy + (i - (lines.length - 1) / 2) * lh); });
+  }
+  function drawSeatChart(c, layout, seats, title, sub, teacherView) {
+    var portrait = layout.rows > layout.cols;
+    var W = portrait ? 1654 : 2339, H = portrait ? 2339 : 1654;
+    var cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var ctx = cv.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    var M = 90;
+    // 見出し
+    ctx.fillStyle = "#2b2521"; ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+    ctx.font = "bold 64px " + PDF_FONT; ctx.fillText(title, M, M + 50);
+    ctx.textAlign = "right"; ctx.font = "34px " + PDF_FONT; ctx.fillStyle = "#6b6057";
+    ctx.fillText(sub, W - M, M + 46);
+    ctx.fillRect(M, M + 80, W - 2 * M, 3);
+
+    var top = M + 120, bottom = H - M - 40, boardH = 70, boardGap = 30;
+    var gridTop = teacherView ? top : top + boardH + boardGap;
+    var gridBottom = teacherView ? bottom - boardH - boardGap : bottom;
+    var rows = range(layout.rows), cols = range(layout.cols);
+    if (teacherView) { rows.reverse(); cols.reverse(); }
+    var SG = 12, GG = 44; // 席と席のすきま・班と班のすきま
+    function gaps(list, size) {
+      var g = [0];
+      for (var i = 1; i < list.length; i++) g.push(g[i - 1] + (Math.floor(list[i] / size) !== Math.floor(list[i - 1] / size) ? GG : SG));
+      return g;
+    }
+    var gx = gaps(cols, layout.gw), gy = gaps(rows, layout.gh);
+    var gridW = W - 2 * M;
+    var cellW = (gridW - gx[gx.length - 1]) / layout.cols;
+    var cellH = Math.min((gridBottom - gridTop - gy[gy.length - 1]) / layout.rows, cellW * 0.8);
+    var usedW = cellW * layout.cols + gx[gx.length - 1];
+    var usedH = cellH * layout.rows + gy[gy.length - 1];
+    var x0 = (W - usedW) / 2;
+    var y0 = teacherView ? gridBottom - usedH : gridTop;
+
+    // 黒板
+    var bw = Math.min(usedW * 0.6, 1100), bx = (W - bw) / 2;
+    var by = teacherView ? y0 + usedH + boardGap : y0 - boardGap - boardH;
+    ctx.fillStyle = "#3a6b63"; roundRect(ctx, bx, by, bw, boardH, 14); ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "bold 38px " + PDF_FONT; ctx.fillText("黒　板", W / 2, by + boardH / 2 + 2);
+
+    var perRow = Math.ceil(layout.cols / layout.gw);
+    rows.forEach(function (r, ri) {
+      cols.forEach(function (col, ci) {
+        var idx = r * layout.cols + col;
+        if (isDisabled(layout, idx)) return;
+        var x = x0 + ci * cellW + gx[ci], y = y0 + ri * cellH + gy[ri];
+        var gr = Math.floor(r / layout.gh), gc = Math.floor(col / layout.gw);
+        ctx.fillStyle = PDF_GROUP_COLORS[(gr * perRow + gc + gr) % 5];
+        roundRect(ctx, x, y, cellW, cellH, 12); ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = "#8a7f75"; ctx.stroke();
+        var no = seats[idx];
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        if (!no) {
+          ctx.fillStyle = "#9a8f85"; fitText(ctx, "空席", x + cellW / 2, y + cellH / 2, cellW - 20, cellH - 10, Math.min(34, cellH * 0.3), "normal");
+        } else if (hasName(c, no)) {
+          var small = Math.max(16, Math.min(28, cellH * 0.2));
+          ctx.fillStyle = "#6b6057"; ctx.font = small + "px " + PDF_FONT;
+          ctx.fillText(no + "番", x + cellW / 2, y + small * 0.9);
+          ctx.fillStyle = "#2b2521";
+          fitText(ctx, dispName(c, no), x + cellW / 2, y + cellH / 2 + small * 0.45, cellW - 20, cellH - small * 1.8, Math.min(60, cellH * 0.36), "bold");
+        } else {
+          ctx.fillStyle = "#2b2521";
+          fitText(ctx, no + "番", x + cellW / 2, y + cellH / 2, cellW - 20, cellH - 10, Math.min(72, cellH * 0.45), "bold");
+        }
+      });
+    });
+    // フッター
+    ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = "#9a8f85"; ctx.font = "24px " + PDF_FONT;
+    ctx.fillText((teacherView ? "先生から見た向き" : "児童から見た向き") + "　／　先生のライフデザインLabo 席替えツール", W - M, H - M + 20);
+    return { canvas: cv, portrait: portrait };
+  }
+  function strBytes(str) { var a = new Uint8Array(str.length); for (var i = 0; i < str.length; i++) a[i] = str.charCodeAt(i) & 0xff; return a; }
+  function buildPdf(jpegBytes, imgW, imgH, pageW, pageH) {
+    var parts = [], offsets = [], length = 0;
+    function add(p) { var b = typeof p === "string" ? strBytes(p) : p; parts.push(b); length += b.length; }
+    function obj(n, body) { offsets[n] = length; add(n + " 0 obj\n"); body(); add("\nendobj\n"); }
+    var content = "q " + pageW + " 0 0 " + pageH + " 0 0 cm /Im0 Do Q";
+    add("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+    obj(1, function () { add("<< /Type /Catalog /Pages 2 0 R >>"); });
+    obj(2, function () { add("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"); });
+    obj(3, function () { add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + pageW + " " + pageH + "] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>"); });
+    obj(4, function () {
+      add("<< /Type /XObject /Subtype /Image /Width " + imgW + " /Height " + imgH + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + jpegBytes.length + " >>\nstream\n");
+      add(jpegBytes); add("\nendstream");
+    });
+    obj(5, function () { add("<< /Length " + content.length + " >>\nstream\n" + content + "\nendstream"); });
+    var xref = length;
+    var x = "xref\n0 6\n0000000000 65535 f \n";
+    for (var i = 1; i <= 5; i++) x += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+    add(x + "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n");
+    var out = new Uint8Array(length), pos = 0;
+    parts.forEach(function (p) { out.set(p, pos); pos += p.length; });
+    return out;
+  }
+  function downloadSeatPdf(className, label, date, c, layout, seats) {
+    try {
+      var dateStr = date.getFullYear() + "年" + (date.getMonth() + 1) + "月" + date.getDate() + "日";
+      var drawn = drawSeatChart(c, layout, seats, className + "　座席表", dateStr + (label ? "　" + label : ""), ui.teacherView);
+      var b64 = drawn.canvas.toDataURL("image/jpeg", 0.92).split(",")[1];
+      var bin = atob(b64), jpeg = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) jpeg[i] = bin.charCodeAt(i);
+      var pdf = buildPdf(jpeg, drawn.canvas.width, drawn.canvas.height, drawn.portrait ? 595 : 842, drawn.portrait ? 842 : 595);
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+      var ymd = date.getFullYear() + String(date.getMonth() + 1).padStart(2, "0") + String(date.getDate()).padStart(2, "0");
+      a.download = "座席表_" + className.replace(/[\\/:*?"<>|【】\s]+/g, "") + "_" + ymd + ".pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+      toast("PDFを保存しました");
+    } catch (e) {
+      toast("PDFを作成できませんでした。「印刷」から「PDFに保存」を選ぶ方法もお試しください");
+    }
+  }
+
   function exportData() {
     var blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
     var a = document.createElement("a");
@@ -1326,6 +1468,12 @@
         if (c.draft && c.draft.savedId === btn.dataset.id) c.draft.savedId = null;
         save(); render();
         break;
+      case "pdf": downloadSeatPdf(c.name, "", new Date(), c, c.draft.layout, c.draft.seats); break;
+      case "pdf-history": {
+        var hp = c.history.find(function (x) { return x.id === btn.dataset.id; });
+        downloadSeatPdf(c.name, hp.label || "", new Date(hp.date), historyClassView(c, hp), hp.layout, hp.seats);
+        break;
+      }
       case "print-history": {
         var hv = c.history.find(function (x) { return x.id === btn.dataset.id; });
         printSeats(c.name + " 座席表（" + fmtDate(hv.date).split(" ")[0] + "）", historyClassView(c, hv), hv.layout, hv.seats);
